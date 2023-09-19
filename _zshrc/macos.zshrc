@@ -84,7 +84,8 @@ HIST_STAMPS="yyyy-mm-dd"
 
 # Cache Freq Use Variables
 ## Homebrew prefix
-__SUKKA_HOMEBREW__PREFIX="/usr/local"
+__SUKKA_HOMWBREW__PREFIX="/usr/local"
+if [[ "$(uname -sm)" = "Darwin arm64" ]] then __SUKKA_HOMWBREW__PREFIX="/opt/homebrew/bin"; fi
 ## pyenv prefix
 __SUKKA_HOMEBREW_PYENV_PREFIX="/usr/local/opt/pyenv"
 ## Box Name used for my zsh-theme
@@ -223,6 +224,7 @@ alias gitall="git add ."
 alias lg="lazygit"
 # Git Undo
 alias git-undo="git reset --soft HEAD^"
+alias tree="tree -aC"
 
 # Git Delete Local Merged
 git-delete-local-merged() {
@@ -446,6 +448,7 @@ update_ohmyzsh_custom_plugins() {
         pushd -q "${p}"
 
         if git pull --rebase; then
+            git gc # > /dev/null 2>&1
             printf "${green}%s${reset}\n" "${p:t} has been updated and/or is at the current version."
         else
             printf "${red}%s${reset}\n" "There was an error updating ${p:t}. Try again later?"
@@ -519,22 +522,22 @@ if (( $+commands[gulp] )) &>/dev/null; then
 fi
 
 # pnpm
-# pnpm completion
 if (( $+commands[pnpm] )) &>/dev/null; then
-    _pnpm_completion() {
-        local reply
-        local si=$IFS
+  # pnpm completions
+  _pnpm_completion () {
+    local reply
+    local si=$IFS
 
-        IFS=$'\n' reply=($(COMP_CWORD="$((CURRENT-1))" COMP_LINE="$BUFFER" COMP_POINT="$CURSOR" pnpm completion -- "${words[@]}"))
-        IFS=$si
+    IFS=$'\n' reply=($(COMP_CWORD="$((CURRENT-1))" COMP_LINE="$BUFFER" COMP_POINT="$CURSOR" pnpm completion -- "${words[@]}"))
+    IFS=$si
 
-        if [ "$reply" = "__tabtab_complete_files__" ]; then
-          _files
-        else
-          _describe 'values' reply
-        fi
-    }
-    compdef _pnpm_completion pnpm
+    if [ "$reply" = "__tabtab_complete_files__" ]; then
+      _files
+    else
+      _describe 'values' reply
+    fi
+  }
+  compdef _pnpm_completion pnpm
 fi
 # pnpm end
 
@@ -750,6 +753,10 @@ mtrskk() {
     "sudo" mtr -b -z -a $(sukka_local_ip) $@ | nali
 }
 
+traceskk() {
+    "sudo" "nexttrace" --always-rdns --source $(sukka_local_ip) $@
+}
+
 # Add npm package manager prompt to powerlevel10k
 prompt_sukka_npm_type() {
     if (( $+commands[node] || $+commands[yarn] || $+commands[npm] || $+commands[pnpm] )) &>/dev/null; then
@@ -837,3 +844,21 @@ if (( $SUKKA_ENABLE_PERFORMANCE_PROFILING )); then
         zprof $@
     }
 fi
+
+# Store commands in history only if successful
+# CREDITS:
+# https://gist.github.com/danydev/4ca4f5c523b19b17e9053dfa9feb246d
+# https://scarff.id.au/blog/2019/zsh-history-conditional-on-command-success/
+
+function __fd18et_prevent_write() {
+  __fd18et_LASTHIST=$1
+  return 2
+}
+function __fd18et_save_last_successed() {
+  if [[ ($? == 0 || $? == 130) && -n $__fd18et_LASTHIST && -n $HISTFILE ]] ; then
+    print -sr -- ${=${__fd18et_LASTHIST%%'\n'}}
+  fi
+}
+add-zsh-hook zshaddhistory __fd18et_prevent_write
+add-zsh-hook precmd __fd18et_save_last_successed
+add-zsh-hook zshexit __fd18et_save_last_successed
